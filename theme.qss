@@ -1,0 +1,148 @@
+/* =======================================================
+   THEME: Liquid Gold
+   STYLE: Warm, Rich, Colorful (No White Backgrounds)
+   ======================================================= */
+
+/* --- GLOBAL SETTINGS --- */
+QMainWindow {
+    /* A Richer, Warm Amber Background (Removes the "Empty" feeling) */
+    background-color: #FFECB3;
+}
+
+QWidget {
+    font-family: "Segoe UI", "Roboto", sans-serif;
+    font-size: 10pt;
+    /* Dark Brown Text (Coffee color) - High contrast but softer than black */
+    color: #3E2723;
+}
+
+/* --- THE SIDEBAR --- */
+QFrame#frame {
+    /* Slightly darker transparency to define the sidebar area */
+    background-color: rgba(255, 202, 40, 0.15);
+
+    /* Strong Orange-Gold divider line */
+    border-right: 3px solid #FF8F00;
+
+    border-top: none;
+    border-left: none;
+    border-bottom: none;
+}
+
+/* --- CARDS (Group Boxes) --- */
+QGroupBox {
+    /* CHANGED: Soft Vanilla/Pale Gold (Instead of Stark White) */
+    background-color: #FFF8E1;
+
+    /* Strong Gold Border */
+    border: 2px solid #FFB300;
+    border-radius: 8px;
+    margin-top: 25px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 6px 25px;
+
+    color: #3E2723; /* Dark text on the header is easier to read */
+    font-weight: bold;
+
+    /* Vibrant Gold Header */
+    background-color: #FFCA28;
+    border: 1px solid #FF8F00;
+    border-radius: 12px;
+}
+
+/* --- BUTTONS (Vibrant & Shiny) --- */
+QPushButton {
+    /* Bright Orange-Gold Background */
+    background-color: #FFB74D;
+
+    /* Darker Orange Border */
+    border: 2px solid #E65100;
+    border-radius: 6px;
+
+    color: #3E2723;
+    font-weight: bold;
+    padding: 8px;
+}
+
+/* Hover: Lighten up */
+QPushButton:hover {
+    background-color: #FFE082; /* Lighter Gold */
+    border-color: #3E2723;     /* Border turns brown for focus */
+    color: #000000;
+}
+
+/* Pressed: Deep Orange */
+QPushButton:pressed {
+    background-color: #FF6F00;
+    color: #FFFFFF;
+}
+
+/* --- SPECIAL BUTTONS --- */
+QPushButton#btnStart {
+    background-color: #66BB6A; /* Fresh Green */
+    border: 2px solid #1B5E20;
+    color: #000000;
+}
+QPushButton#btnStart:hover {
+    background-color: #81C784;
+    border-color: #000000;
+}
+
+QPushButton#btnStop {
+    background-color: #EF5350; /* Soft Red */
+    border: 2px solid #B71C1C;
+    color: #000000;
+}
+QPushButton#btnStop:hover {
+    background-color: #E57373;
+    border-color: #000000;
+}
+
+/* --- INPUT FIELDS --- */
+QComboBox, QSpinBox {
+    /* Darker Gold/Tan background so they stand out from the card */
+    background-color: #FFE0B2;
+    border: 2px solid #FF8F00;
+    border-radius: 4px;
+    padding: 5px;
+    color: #3E2723;
+    font-weight: bold;
+}
+
+QComboBox:focus, QSpinBox:focus {
+    background-color: #FFF3E0;
+    border: 2px solid #BF360C; /* Red-Orange Glow */
+}
+
+/* --- GRAPH & LOG --- */
+/* Kept dark for professional look, but with Gold Borders */
+QFrame#frameGraph {
+    background-color: #212121;
+    border: 4px solid #FFB300;
+    border-radius: 6px;
+}
+
+QTextEdit#txtLog {
+    background-color: #3E2723; /* Dark Coffee */
+    border: 2px solid #FFB300;
+    border-radius: 4px;
+    color: #FFECB3; /* Light Gold Text */
+    font-family: "Consolas", monospace;
+}
+
+/* --- STATUS LABEL --- */
+QLabel#lblStatus {
+    font-weight: bold;
+    font-size: 11pt;
+    padding: 8px;
+
+    /* Matching the Input Fields */
+    background-color: #FFE0B2;
+    border: 2px dashed #E65100;
+    color: #BF360C;
+    border-radius: 6px;
+}
