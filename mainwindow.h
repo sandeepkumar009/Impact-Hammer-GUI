@@ -4,6 +4,10 @@
 #include <QMainWindow>
 #include <QSerialPort>
 #include <QSerialPortInfo>
+#include <QTimer>
+#include <QVector>
+#include <QThread>
+#include "daqworker.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -30,9 +34,25 @@ private slots:
     // Serial Slots
     void readSerialData(); // Function to handle incoming data
 
+    // ADD THESE TWO NEW SLOTS
+    void updatePlot();     // The 60 FPS render loop
+    void onDataReady(QVector<double> accel, QVector<double> hammer); // REPLACED dummy slot
+    void onDaqError(QString errorMsg);                               // NEW error handler
+
 private:
     Ui::MainWindow *ui;
     QSerialPort *serial;
+
+    // ADD THESE VARIABLES FOR PLOTTING
+    QTimer *renderTimer;
+    QVector<double> timeData;
+    QVector<double> accelData;
+    QVector<double> hammerData;
+    double currentTime;
+
+    // DAQ Threading Variables
+    QThread *daqThread;  // NEW
+    DaqWorker *worker;   // NEW
 
     // Helper functions
     void updateLog(const QString &message);
