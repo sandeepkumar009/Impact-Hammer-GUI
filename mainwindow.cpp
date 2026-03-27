@@ -60,7 +60,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 6. Set initial Y-axis ranges
     accelRect->axis(QCPAxis::atLeft)->setRange(-5.0, 5.0);   // Expected g-force range
-    hammerRect->axis(QCPAxis::atLeft)->setRange(-10.0, 500.0); // Expected Newton range
+    hammerRect->axis(QCPAxis::atLeft)->setRange(-10.0, 10.0); // Expected Newton range
     // ==========================================
 
     // --- STEP 4: PLOTTING & DAQ THREAD SETUP ---
@@ -168,14 +168,14 @@ void MainWindow::sendValue(char prefixChar, int value) {
 void MainWindow::on_btnStart_clicked()
 {
     // 1. Send Configuration first
-    sendValue('H', ui->spinHits->value());  // 'H' for Hits
-    sendValue('D', ui->spinDelay->value()); // 'D' for Delay
+    // sendValue('H', ui->spinHits->value());  // 'H' for Hits
+    // sendValue('D', ui->spinDelay->value()); // 'D' for Delay
 
     // 2. Start the DAQ Hardware (Invoke on the background thread!)
     QMetaObject::invokeMethod(worker, "startDaq");
 
     // 3. Send Start Command to Teensy
-    sendCommand('S');
+    sendCommand('s');
 
     updateLog("DAQ and Teensy Started.");
 }
@@ -186,7 +186,7 @@ void MainWindow::on_btnStop_clicked()
     QMetaObject::invokeMethod(worker, "stopDaq");
 
     // 2. Stop the Teensy
-    sendCommand('X');  // 'X' for Stop/Abort
+    sendCommand('n');  // 'n' for Stop/Abort
 
     updateLog("System Stopped.");
 }

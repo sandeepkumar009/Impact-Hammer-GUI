@@ -146,3 +146,30 @@ QLabel#lblStatus {
     color: #BF360C;
     border-radius: 6px;
 }
+
+/* ======================================================= */
+/* --- MESSAGE BOX (Dialogs & Pop-ups) --- */
+/* ======================================================= */
+
+QMessageBox {
+    /* Match the Soft Vanilla background of your cards */
+    background-color: #FFF8E1;
+
+    /* Optional: Adds a subtle border if the OS allows it on popups */
+    border: 2px solid #FFB300;
+}
+
+/* The text inside the message box */
+QMessageBox QLabel {
+    color: #3E2723; /* Dark Coffee Brown */
+    font-size: 11pt;
+    font-weight: bold;
+    padding-right: 15px; /* Gives the text some breathing room from the edges */
+}
+
+/* Ensure the buttons inside the popup aren't too small */
+QMessageBox QPushButton {
+    min-width: 100px;
+    min-height: 30px;
+    /* Background and hover effects are automatically inherited from your global QPushButton styles! */
+}
