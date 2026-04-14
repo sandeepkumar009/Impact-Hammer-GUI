@@ -7,6 +7,7 @@
 #include <QTimer>
 #include <QVector>
 #include <QThread>
+#include <complex>
 #include "daqworker.h"
 
 QT_BEGIN_NAMESPACE
@@ -49,6 +50,22 @@ private:
     QVector<double> accelData;
     QVector<double> hammerData;
     double currentTime;
+
+    // --- NEW: FRF Trigger and Capture Variables ---
+    bool isCapturing;
+    const int FFT_SIZE = 4096;    // Must be a power of 2 for FFT
+    const int PRE_TRIGGER_SAMPLES = 100; // Capture 0.01s of data before the hit
+    double triggerThreshold;      // The force (N) required to trigger capture
+    QVector<double> captureAccel;
+    QVector<double> captureHammer;
+
+    // --- NEW: FRF Plotting Variables ---
+    QVector<double> freqData;
+    QVector<double> frfMagnitude;
+
+    // --- NEW: Math Functions ---
+    void calculateFRF();
+    void performFFT(std::vector<std::complex<double>>& data);
 
     // DAQ Threading Variables
     QThread *daqThread;  // NEW

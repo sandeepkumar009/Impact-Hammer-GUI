@@ -12,55 +12,62 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // // --- TEMPORARY GRAPH TEST SETUP ---
-    // // Add two graphs (one for Accel, one for Hammer)
-    // ui->frameGraph->addGraph();
-    // ui->frameGraph->graph(0)->setPen(QPen(Qt::cyan)); // Graph 0: Accel
-
-    // ui->frameGraph->addGraph();
-    // ui->frameGraph->graph(1)->setPen(QPen(QColor(255, 180, 100))); // Graph 1: Hammer (Orange)
-
-    // // Give the axes some labels
-    // ui->frameGraph->xAxis->setLabel("Time / Samples");
-    // ui->frameGraph->yAxis->setLabel("Amplitude");
-
-    // // Set axis ranges so we can see something
-    // ui->frameGraph->xAxis->setRange(0, 1000);
-    // ui->frameGraph->yAxis->setRange(-10, 10);
-    // // -----------------------------------
-
     // ==========================================
-    // --- STEP 5: DUAL SUBPLOT SETUP ---
+    // --- STEP 5: 3-PANEL LAYOUT SETUP (Accel, Hammer, FRF) ---
     // ==========================================
 
-    // 1. Configure the default Top Axis Rect (Accelerometer)
-    QCPAxisRect *accelRect = ui->frameGraph->axisRect(); // Get the default axis rect
+    // Clear default layout
+    ui->frameGraph->plotLayout()->clear();
+
+    // Create a sub-layout for the left side (Accel and Hammer)
+    QCPLayoutGrid *leftLayout = new QCPLayoutGrid;
+    ui->frameGraph->plotLayout()->addElement(0, 0, leftLayout);
+
+    // 1. Accel Rect (Top Left)
+    QCPAxisRect *accelRect = new QCPAxisRect(ui->frameGraph);
     accelRect->axis(QCPAxis::atLeft)->setLabel("Accel (g)");
-    // Hide the X-axis tick labels on the top graph to make it look cleaner
     accelRect->axis(QCPAxis::atBottom)->setTickLabels(false);
+    leftLayout->addElement(0, 0, accelRect);
 
-    // 2. Create the Bottom Axis Rect (Impact Hammer)
+    // 2. Hammer Rect (Bottom Left)
     QCPAxisRect *hammerRect = new QCPAxisRect(ui->frameGraph);
     hammerRect->axis(QCPAxis::atLeft)->setLabel("Hammer (N)");
     hammerRect->axis(QCPAxis::atBottom)->setLabel("Time (s)");
+    leftLayout->addElement(1, 0, hammerRect);
 
-    // 3. Add the new rect to the layout (Row 1, Col 0)
-    ui->frameGraph->plotLayout()->addElement(1, 0, hammerRect);
+    // 3. FRF Rect (Right Side - spans the whole height natively)
+    QCPAxisRect *frfRect = new QCPAxisRect(ui->frameGraph);
+    frfRect->axis(QCPAxis::atLeft)->setLabel("Accelerance FRF |H| (g/N)");
+    frfRect->axis(QCPAxis::atBottom)->setLabel("Frequency (Hz)");
+    // Set FRF Y-Axis to Logarithmic scale (standard for FRF)
+    frfRect->axis(QCPAxis::atLeft)->setScaleType(QCPAxis::stLogarithmic);
+    QSharedPointer<QCPAxisTickerLog> logTicker(new QCPAxisTickerLog);
+    frfRect->axis(QCPAxis::atLeft)->setTicker(logTicker);
+    ui->frameGraph->plotLayout()->addElement(0, 1, frfRect);
 
-    // Add some spacing between the top and bottom plots
-    ui->frameGraph->plotLayout()->setRowSpacing(15);
+    // Adjust column stretch factors (Make left and right equal width)
+    ui->frameGraph->plotLayout()->setColumnStretchFactor(0, 1);
+    ui->frameGraph->plotLayout()->setColumnStretchFactor(1, 1);
 
-    // 4. Create Graph 0 (Accel) and attach it to the Top Rect
+    // Create Graphs and attach to Rects
     ui->frameGraph->addGraph(accelRect->axis(QCPAxis::atBottom), accelRect->axis(QCPAxis::atLeft));
     ui->frameGraph->graph(0)->setPen(QPen(Qt::cyan));
 
-    // 5. Create Graph 1 (Hammer) and attach it to the Bottom Rect
     ui->frameGraph->addGraph(hammerRect->axis(QCPAxis::atBottom), hammerRect->axis(QCPAxis::atLeft));
     ui->frameGraph->graph(1)->setPen(QPen(QColor(255, 180, 100))); // Orange
 
-    // 6. Set initial Y-axis ranges
-    accelRect->axis(QCPAxis::atLeft)->setRange(-5.0, 5.0);   // Expected g-force range
-    hammerRect->axis(QCPAxis::atLeft)->setRange(-10.0, 10.0); // Expected Newton range
+    ui->frameGraph->addGraph(frfRect->axis(QCPAxis::atBottom), frfRect->axis(QCPAxis::atLeft));
+    ui->frameGraph->graph(2)->setPen(QPen(Qt::magenta)); // Magenta for FRF
+
+    // Set initial Y-axis ranges
+    accelRect->axis(QCPAxis::atLeft)->setRange(-5.0, 5.0);
+    hammerRect->axis(QCPAxis::atLeft)->setRange(-10.0, 10.0);
+    frfRect->axis(QCPAxis::atBottom)->setRange(0, 2000); // Display 0 to 2000 Hz initially
+    frfRect->axis(QCPAxis::atLeft)->setRange(0.001, 10); // Log scale needs non-zero min
+
+    // --- NEW: Initialize Trigger Variables ---
+    isCapturing = false;
+    triggerThreshold = 10.0; // Trigger data capture when hammer force > 10 Newtons
     // ==========================================
 
     // --- STEP 4: PLOTTING & DAQ THREAD SETUP ---
@@ -168,8 +175,8 @@ void MainWindow::sendValue(char prefixChar, int value) {
 void MainWindow::on_btnStart_clicked()
 {
     // 1. Send Configuration first
-    // sendValue('H', ui->spinHits->value());  // 'H' for Hits
-    // sendValue('D', ui->spinDelay->value()); // 'D' for Delay
+    sendValue('H', ui->spinHits->value());  // 'H' for Hits
+    sendValue('D', ui->spinDelay->value()); // 'D' for Delay
 
     // 2. Start the DAQ Hardware (Invoke on the background thread!)
     QMetaObject::invokeMethod(worker, "startDaq");
@@ -244,6 +251,35 @@ void MainWindow::onDataReady(QVector<double> accel, QVector<double> hammer)
         timeData.append(currentTime);
         accelData.append(accel[i]);
         hammerData.append(hammer[i]);
+
+        // --- NEW: Trigger & Capture Logic ---
+        // If we are not capturing, look for a strike exceeding the threshold
+        if (!isCapturing && hammer[i] > triggerThreshold) {
+            isCapturing = true;
+            captureAccel.clear();
+            captureHammer.clear();
+
+            // PRE-TRIGGER: Copy the last 100 samples from the rolling history
+            int preTriggerCount = qMin((int)PRE_TRIGGER_SAMPLES, accelData.size());
+            for (int j = accelData.size() - preTriggerCount; j < accelData.size(); ++j) {
+                captureAccel.append(accelData[j]);
+                captureHammer.append(hammerData[j]);
+            }
+
+            updateLog(QString("Impact Detected! Capturing FFT block (including %1 pre-trigger samples)...").arg(preTriggerCount));
+        }
+
+        // If a strike occurred, record the block of data
+        if (isCapturing) {
+            captureAccel.append(accel[i]);
+            captureHammer.append(hammer[i]);
+
+            // Once we have 4096 samples (approx 0.4 seconds of data at 10kHz)
+            if (captureAccel.size() >= FFT_SIZE) {
+                isCapturing = false;
+                calculateFRF(); // Compute and plot the FRF
+            }
+        }
     }
 
     // Keep memory usage low.
@@ -272,15 +308,97 @@ void MainWindow::updatePlot()
     if (!timeData.isEmpty()) {
         double latestTime = timeData.last();
 
-        // Get pointers to both axis rectangles
-        QCPAxisRect *accelRect = ui->frameGraph->axisRect(0);
-        QCPAxisRect *hammerRect = ui->frameGraph->axisRect(1);
-
-        // Scroll both to show the last 2 seconds
-        accelRect->axis(QCPAxis::atBottom)->setRange(latestTime - 2.0, latestTime);
-        hammerRect->axis(QCPAxis::atBottom)->setRange(latestTime - 2.0, latestTime);
+        // SAFELY target the exact X-axes of the Accel and Hammer graphs
+        ui->frameGraph->graph(0)->keyAxis()->setRange(latestTime - 2.0, latestTime);
+        ui->frameGraph->graph(1)->keyAxis()->setRange(latestTime - 2.0, latestTime);
     }
 
     // 3. Command the GPU/CPU to redraw the visual widget
     ui->frameGraph->replot();
+}
+
+// ==========================================
+// --- FRF AND SIGNAL PROCESSING MATH ---
+// ==========================================
+
+// Standard Cooley-Tukey Radix-2 FFT Algorithm
+void MainWindow::performFFT(std::vector<std::complex<double>>& x)
+{
+    int n = x.size();
+    if (n <= 1) return;
+
+    std::vector<std::complex<double>> even(n / 2), odd(n / 2);
+    for (int i = 0; i < n / 2; i++) {
+        even[i] = x[i * 2];
+        odd[i] = x[i * 2 + 1];
+    }
+
+    performFFT(even);
+    performFFT(odd);
+
+    const double PI = std::acos(-1.0);
+    for (int k = 0; k < n / 2; k++) {
+        std::complex<double> t = std::polar(1.0, -2.0 * PI * k / n) * odd[k];
+        x[k] = even[k] + t;
+        x[k + n / 2] = even[k] - t;
+    }
+}
+
+void MainWindow::calculateFRF()
+{
+    int n = FFT_SIZE;
+    std::vector<std::complex<double>> f_comp(n), a_comp(n);
+
+    // 1. Move captured vectors into complex arrays
+    for (int i = 0; i < n; i++) {
+        f_comp[i] = std::complex<double>(captureHammer[i], 0);
+        a_comp[i] = std::complex<double>(captureAccel[i], 0);
+    }
+
+    // 2. Compute Fast Fourier Transforms
+    performFFT(f_comp);
+    performFFT(a_comp);
+
+    freqData.clear();
+    frfMagnitude.clear();
+
+    double sampleRate = 10000.0;
+    double df = sampleRate / n; // Frequency resolution (approx 2.44 Hz)
+
+    // 3. Compute H1 FRF = S_fa / S_ff
+    // We only loop to n/2 because frequencies above Nyquist are mirrored
+    for (int k = 1; k < n / 2; k++) { // Start at 1 to ignore DC offset (0 Hz)
+        std::complex<double> f_conj = std::conj(f_comp[k]);
+
+        // Cross-Power Spectrum (Force and Accel)
+        std::complex<double> S_fa = f_conj * a_comp[k];
+
+        // Auto-Power Spectrum (Force)
+        std::complex<double> S_ff = f_conj * f_comp[k];
+
+        // FRF (H1 Estimator)
+        // Since S_ff is technically purely real, we can divide by its real part
+        std::complex<double> H1 = S_fa / S_ff.real();
+
+        // Get Magnitude for plotting
+        double mag = std::abs(H1);
+
+        // Prevent exact 0s from breaking the logarithmic plot
+        if(mag < 0.0001) mag = 0.0001;
+
+        freqData.append(k * df);
+        frfMagnitude.append(mag);
+    }
+
+    // 4. Update the Graph
+    ui->frameGraph->graph(2)->setData(freqData, frfMagnitude);
+
+    // Auto-scale the Y-axis based on the new resonance peaks
+    ui->frameGraph->graph(2)->valueAxis()->rescale();
+
+    // Add a bit of padding to the top/bottom of the auto-scale
+    ui->frameGraph->graph(2)->valueAxis()->scaleRange(1.5);
+
+    ui->frameGraph->replot();
+    updateLog("FRF Calculation Complete.");
 }
