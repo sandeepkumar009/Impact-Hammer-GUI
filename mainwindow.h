@@ -31,6 +31,9 @@ private slots:
     void on_btnStop_clicked();
     void on_btnIncAngle_clicked();
     void on_btnDecAngle_clicked();
+    void on_btnAutoCalib_clicked();
+    void autoCalibrateTick();
+    void onSerialError(QSerialPort::SerialPortError error);
 
     // Serial Slots
     void readSerialData(); // Function to handle incoming data
@@ -43,6 +46,12 @@ private slots:
 private:
     Ui::MainWindow *ui;
     QSerialPort *serial;
+
+    // --- Auto Calibration Variables ---
+    QTimer *calibTimer;
+    bool isCalibrating;
+    double softTouchThreshold;      // Force in Newtons for a "soft touch"
+    double latestForceReading;      // Holds the most recent hammer force
 
     // ADD THESE VARIABLES FOR PLOTTING
     QTimer *renderTimer;

@@ -4,6 +4,7 @@
 #include <QMessageBox>
 #include <QDateTime>
 #include <QMetaType> // ADD THIS
+#include <algorithm>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -70,6 +71,16 @@ MainWindow::MainWindow(QWidget *parent)
     triggerThreshold = 10.0; // Trigger data capture when hammer force > 10 Newtons
     // ==========================================
 
+    // === ADD THIS BLOCK ===
+    // --- Auto Calibration Setup ---
+    isCalibrating = false;
+    softTouchThreshold = 0.5; // 0.5 Newtons for a soft touch
+    latestForceReading = 0.0;
+
+    calibTimer = new QTimer(this);
+    connect(calibTimer, &QTimer::timeout, this, &MainWindow::autoCalibrateTick);
+    // ========================
+
     // --- STEP 4: PLOTTING & DAQ THREAD SETUP ---
     currentTime = 0.0;
 
@@ -107,6 +118,9 @@ MainWindow::MainWindow(QWidget *parent)
     // Connect Serial Signal to our Slot
     connect(serial, &QSerialPort::readyRead, this, &MainWindow::readSerialData);
 
+    // === ADD THIS LINE ===
+    connect(serial, &QSerialPort::errorOccurred, this, &MainWindow::onSerialError);
+
     // Apply Styling (Paste the styling code from Phase 4 here)
 }
 
@@ -130,6 +144,10 @@ void MainWindow::on_btnConnect_clicked()
         ui->btnConnect->setText("Connect");
         ui->lblStatus->setText("System Status: DISCONNECTED");
         ui->lblStatus->setStyleSheet("color: red;");
+
+        // Stop the DAQ when we disconnect
+        QMetaObject::invokeMethod(worker, "stopDaq");
+
         updateLog("Disconnected.");
     } else {
         serial->setPortName(ui->comboPort->currentText());
@@ -144,6 +162,10 @@ void MainWindow::on_btnConnect_clicked()
             ui->lblStatus->setText("System Status: CONNECTED");
             ui->lblStatus->setStyleSheet("color: #00ff00;"); // Green text
             updateLog("Connected to " + ui->comboPort->currentText());
+
+            // Start the DAQ immediately for Live Monitoring
+            QMetaObject::invokeMethod(worker, "startDaq");
+            updateLog("DAQ Live Monitoring Started.");
         } else {
             QMessageBox::critical(this, "Error", "Could not open port!");
         }
@@ -179,23 +201,23 @@ void MainWindow::on_btnStart_clicked()
     sendValue('D', ui->spinDelay->value()); // 'D' for Delay
 
     // 2. Start the DAQ Hardware (Invoke on the background thread!)
-    QMetaObject::invokeMethod(worker, "startDaq");
+    // QMetaObject::invokeMethod(worker, "startDaq");
 
     // 3. Send Start Command to Teensy
     sendCommand('s');
 
-    updateLog("DAQ and Teensy Started.");
+    updateLog("Teensy sequence started.");
 }
 
 void MainWindow::on_btnStop_clicked()
 {
     // 1. Stop the DAQ Hardware
-    QMetaObject::invokeMethod(worker, "stopDaq");
+    // QMetaObject::invokeMethod(worker, "stopDaq");
 
     // 2. Stop the Teensy
     sendCommand('n');  // 'n' for Stop/Abort
 
-    updateLog("System Stopped.");
+    updateLog("Teensy sequence aborted. Live monitoring active.");
 }
 
 void MainWindow::on_btnIncAngle_clicked()
@@ -288,6 +310,11 @@ void MainWindow::onDataReady(QVector<double> accel, QVector<double> hammer)
         timeData.removeFirst();
         accelData.removeFirst();
         hammerData.removeFirst();
+    }
+
+    // Scan all points in the chunk to ensure we don't miss a microscopic touch
+    if (!hammer.isEmpty()) {
+        latestForceReading = *std::max_element(hammer.begin(), hammer.end());
     }
 }
 
@@ -401,4 +428,78 @@ void MainWindow::calculateFRF()
 
     ui->frameGraph->replot();
     updateLog("FRF Calculation Complete.");
+}
+
+// ==========================================
+// --- HARDWARE ERROR HANDLING ---
+// ==========================================
+
+void MainWindow::onSerialError(QSerialPort::SerialPortError error)
+{
+    // Triggered if the USB is unexpectedly unplugged
+    if (error == QSerialPort::ResourceError) {
+        updateLog("CRITICAL: Teensy USB connection lost!");
+
+        if (serial->isOpen()) serial->close();
+
+        if (isCalibrating) {
+            calibTimer->stop();
+            isCalibrating = false;
+            ui->btnAutoCalib->setText("Auto Calibrate");
+        }
+
+        ui->btnConnect->setText("Connect");
+        ui->lblStatus->setText("System Status: HARDWARE LOST");
+        ui->lblStatus->setStyleSheet("color: red;");
+
+        QMessageBox::critical(this, "Hardware Disconnected", "Communication with the Teensy was lost. Please check the USB cable.");
+    }
+}
+
+// ==========================================
+// --- AUTO CALIBRATION LOGIC ---
+// ==========================================
+
+void MainWindow::on_btnAutoCalib_clicked()
+{
+    if (isCalibrating) {
+        calibTimer->stop();
+        isCalibrating = false;
+        updateLog("Auto-Calibration canceled by user.");
+        ui->btnAutoCalib->setText("Auto Calibrate");
+        return;
+    }
+
+    if (!serial->isOpen()) {
+        QMessageBox::warning(this, "Error", "Connect hardware first!");
+        return;
+    }
+
+    isCalibrating = true;
+    ui->btnAutoCalib->setText("Stop Calibration");
+    updateLog("Starting Auto-Calibration... finding plate.");
+
+    // Timer set to 100ms constraint to prevent command pile-up
+    calibTimer->start(200);
+}
+
+void MainWindow::autoCalibrateTick()
+{
+    if (latestForceReading > softTouchThreshold) {
+        // 1. INSTANT STOP
+        calibTimer->stop();
+        isCalibrating = false;
+
+        // 2. BACK-OFF MANEUVER (Release sensor tension)
+        // sendCommand('[');
+        // sendCommand('[');
+
+        // 3. UI UPDATE
+        ui->btnAutoCalib->setText("Auto Calibrate");
+        updateLog("Plate detected! Backed off to release pressure. Ready.");
+    }
+    else {
+        // 4. MICRO-STEP DOWN
+        sendCommand(']');
+    }
 }

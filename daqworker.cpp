@@ -2,7 +2,7 @@
 
 // Configuration constants
 #define SAMPLE_RATE 10000.0
-#define SAMPLES_PER_READ 1000
+#define SAMPLES_PER_READ 100
 #define NUM_CHANNELS 2
 #define HAMMER_SENSITIVITY 2.25
 
